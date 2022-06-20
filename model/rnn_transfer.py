@@ -1,12 +1,11 @@
-from tkinter.messagebox import NO
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 import numpy as np
 
+
 class Solution:
     def __init__(self) -> None:
-        self.seq_data = [['word', '단어'],['wood','나무'],
-        ['game', '놀이'],['girl', '소녀'],['kiss', '키스'],['love', '사랑']]
+
         self.char_arr = [c for c in 'SEPabcdefghijklmnopqrstuvwxyz단어나무놀이소녀키스사랑']
         self.num_dic = {n: i for i, n in enumerate(self.char_arr)}
         self.dic_len = len(self.num_dic)
@@ -18,28 +17,33 @@ class Solution:
         self.n_hidden = 128
         self.total_epoch = 100
 
-        self.n_class = self.dic_len
-        self.n_input = self.dic_len
+        self.n_class = self.n_input = self.dic_len
         # 입력과 출력의 형태가 ohe 와 같으므로 크기도 동일함
-        self.optimizer = None
+
+        # 영어를 번역하기 위한 학습데이터
+
+        self.seq_data = [['word', '단어'],['wood','나무'],
+                ['game', '놀이'],['girl', '소녀'],['kiss', '키스'],['love', '사랑']]
+
+        self.model = None
+        self.sess = None
         self.cost = None
         self.enc_input = None
         self.dec_input = None
         self.targets = None
-        self.model = None
+        self.optimizer = None
 
     def hook(self):
         self.create_model()
         self.fit()
-        self.test()
+        self.eval()
 
     def make_batch(self, seq_data):
-        num_dic = self.num_dic
-        dic_len = self.dic_len
-        
         input_batch = []
         output_batch = []
         target_batch = []
+        num_dic = self.num_dic
+        dic_len = self.dic_len
 
         for seq in seq_data:
             input = [num_dic[n] for n in seq[0]]
@@ -60,16 +64,17 @@ class Solution:
             output_batch.append(np.eye(dic_len)[output])
             target_batch.append(target)
         return input_batch, output_batch, target_batch
-
-    def create_model(self):            
-        n_input = self.n_input
-        n_hidden = self.n_hidden
-        n_class = self.n_class
-        learning_rate = self.learning_rate
+                
+        
+    def create_model(self):
 
         # *****
         # 신경망 모델 구성
         # *****
+        n_input = self.n_input
+        n_hidden = self.n_hidden
+        n_class = self.n_class
+        learning_rate = self.learning_rate
 
         self.enc_input = tf.placeholder(tf.float32, [None, None, n_input])
         # [배치사이즈, 타입스텝, 인풋사이즈]
@@ -95,59 +100,48 @@ class Solution:
         self.optimizer = tf.train.AdamOptimizer(learning_rate).minimize(self.cost)
 
     def fit(self):
-        seq_data = self.seq_data
-        total_epoch = self.total_epoch
-        optimizer = self.optimizer
-        cost = self.cost
-        enc_input = self.enc_input
-        dec_input = self.enc_input
-        targets = self.targets
         # *****
         # 신경망 모델 학습
         # *****
-        sess = tf.Session()
-        sess.run(tf.global_variables_initializer())
-        input_batch, output_batch, target_batch = self.make_batch(seq_data)
 
-        for epoch in range(total_epoch):
-            _, loss = sess.run([optimizer, cost],
-                            {enc_input: input_batch,
-                                dec_input: output_batch,
-                                targets: target_batch})
+        self.sess = tf.Session()
+        sess = self.sess
+        sess.run(tf.global_variables_initializer())
+        input_batch, output_batch, target_batch = self.make_batch(self.seq_data)
+
+        for epoch in range(self.total_epoch):
+            _, loss = sess.run([self.optimizer, self.cost],
+                            {self.enc_input: input_batch,
+                                self.dec_input: output_batch,
+                                self.targets: target_batch})
             print('Epoch: ', '%04d' % (epoch + 1),'cost: ','{:6f}'.format(loss))
         print('-------최적화 완료------')
 
-    # *****
-    # 번역 테스트
-    # *****
-    def translate(self, word):
-        model = self.model
-        enc_input = self.enc_input
-        dec_input = self.dec_input
-        targets = self.targets
-        char_arr = self.char_arr
-        sess = tf.Session()
-        
-        s_d = [word, 'P' * len(word)]
-        input_batch, output_batch, target_batch = self.make_batch([s_d])
-        prediction = tf.arg_max(model, 2)
-        result = sess.run(prediction,
-                        {enc_input: input_batch,
-                        dec_input: output_batch,
-                        targets: target_batch})
-        decoded = [char_arr[i] for i in result[0]]
-        end = decoded.index('E')
-        translated = ' '.join(decoded[:end])
-        return translated
+    def eval(self):
+        # *****
+        # 번역 테스트
+        # *****
 
-    def test(self):
+        def translate(word):
+            seq_data = [word, 'P' * len(word)]
+            input_batch, output_batch, target_batch = self.make_batch([seq_data])
+            prediction = tf.arg_max(self.model, 2)
+            result = self.sess.run(prediction,
+                            {self.enc_input: input_batch,
+                            self.dec_input: output_batch,
+                            self.targets: target_batch})
+            decoded = [self.char_arr[i] for i in result[0]]
+            end = decoded.index('E')
+            translated = ' '.join(decoded[:end])
+            return translated
+
         print('======= 번역 테스트 ========')
-        print('word -> ', self.translate('word'))
-        print('love -> ', self.translate('love'))
-        print('loev -> ', self.translate('loev'))
-        print('girl -> ', self.translate('girl'))
-        print('abcd -> ', self.translate('abcd'))
+        print('word -> ', translate('word'))
+        print('love -> ', translate('love'))
+        print('loev -> ', translate('loev'))
+        print('girl -> ', translate('girl'))
+        print('abcd -> ', translate('abcd'))
+
 
 if __name__=='__main__':
-    # 영어를 번역하기 위한 학습데이터
     Solution().hook()
